@@ -1,4 +1,4 @@
-name = "d1-auth-example"
+name = "sentience-workflow"
 main = "src/index.ts"
 compatibility_date = "2023-05-18"
 

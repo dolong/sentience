@@ -18,7 +18,9 @@ export class AuthRegister extends OpenAPIRoute {
         summary: 'Register user',
         requestBody: {
             name: String,
+            username: String,
             email: new Email(),
+            silver: Number,
             password: z.string().min(8).max(16),
         },
         responses: {
@@ -28,7 +30,7 @@ export class AuthRegister extends OpenAPIRoute {
                     success: Boolean,
                     result: {
                         user: {
-                            email: String,
+                            username: String,
                             name: String
                         }
                     }
@@ -50,7 +52,9 @@ export class AuthRegister extends OpenAPIRoute {
             user = await context.qb.insert({
                 tableName: 'users',
                 data: {
+                    username: data.body.username,
                     email: data.body.email,
+                    silver: data.body.silver,
                     name: data.body.name,
                     password: await hashPassword(data.body.password, env.SALT_TOKEN),
                 },
@@ -59,7 +63,7 @@ export class AuthRegister extends OpenAPIRoute {
         } catch (e) {
             return new Response(JSON.stringify({
                 success: false,
-                errors: "User with that email already exists"
+                errors: "User with that username already exists"
             }), {
                 headers: {
                     'content-type': 'application/json;charset=UTF-8',
@@ -72,7 +76,7 @@ export class AuthRegister extends OpenAPIRoute {
             success: true,
             result: {
                 user: {
-                    email: user.results.email,
+                    username: user.results.username,
                     name: user.results.name,
                 }
             }
@@ -81,12 +85,128 @@ export class AuthRegister extends OpenAPIRoute {
 }
 
 
+
+export class AuthOrRegister extends OpenAPIRoute {
+    static schema = {
+        tags: ['Auth'],
+        summary: 'Register user',
+        requestBody: {
+            name: String,
+            username: String,
+            email: new Email(),
+            password: z.string().min(8).max(16),
+        },
+        responses: {
+            '200': {
+                description: "Successful response",
+                schema: {
+                    success: Boolean,
+                    result: {
+                        user: {
+                            username: String,
+                            name: String
+                        }
+                    }
+                },
+            },
+            '400': {
+                description: "Error",
+                schema: {
+                    success: Boolean,
+                    error: String
+                },
+            },
+        },
+    };
+
+    async handle(request: Request, env: any, context: any, data: Record<string, any>) {
+        let user
+        try {
+            let user = await context.qb.fetchOne({
+                tableName: 'users',
+                fields: '*',
+                where: {
+                    conditions: [
+                        'username = ?1',
+                        'password = ?2'
+                    ],
+                    params: [
+                        data.body.username,
+                        await hashPassword(data.body.password, env.SALT_TOKEN)
+                    ]
+                },
+            }).execute()
+    
+            //Registeer user if not exists
+            if (!user.results) {
+                // User is registered    
+                user = await context.qb.insert({
+                    tableName: 'users',
+                    data: {
+                        username: data.body.username,
+                        email: data.body.email,
+                        silver: 1000,
+                        name: data.body.name,
+                        password: await hashPassword(data.body.password, env.SALT_TOKEN),
+                    },
+                    returning: '*'
+                }).execute()
+            } 
+            //Auth User if exists
+            else {
+                let expiration = new Date();
+                expiration.setDate(expiration.getDate() + 7);
+        
+                const session = await context.qb.insert({
+                    tableName: 'users_sessions',
+                    data: {
+                        user_id: user.results.id,
+                        token: await hashPassword((Math.random() + 1).toString(3), env.SALT_TOKEN),
+                        expires_at: expiration.getTime()
+                    },
+                    returning: '*'
+                }).execute()
+        
+                return {
+                    success: true,
+                    result: {
+                        session: {
+                            token: session.results.token,
+                            expires_at: session.results.expires_at,
+                        }
+                    }
+                }
+            }         
+        } catch (e) {
+            return new Response(JSON.stringify({
+                success: false,
+                errors: "Incorrect Password"
+            }), {
+                headers: {
+                    'content-type': 'application/json;charset=UTF-8',
+                },
+                status: 400,
+            })
+        }
+
+        return {
+            success: true,
+            result: {
+                user: {
+                    username: user.results.username,
+                    name: user.results.name,
+                }
+            }
+        }
+    }
+}
+
 export class AuthLogin extends OpenAPIRoute {
     static schema = {
         tags: ['Auth'],
         summary: 'Login user',
         requestBody: {
-            email: new Email(),
+            username: String,
             password: z.string().min(8).max(16),
         },
         responses: {
@@ -118,11 +238,11 @@ export class AuthLogin extends OpenAPIRoute {
             fields: '*',
             where: {
                 conditions: [
-                    'email = ?1',
+                    'username = ?1',
                     'password = ?2'
                 ],
                 params: [
-                    data.body.email,
+                    data.body.username,
                     await hashPassword(data.body.password, env.SALT_TOKEN)
                 ]
             },

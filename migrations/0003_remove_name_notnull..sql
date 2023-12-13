@@ -9,7 +9,6 @@ create table users
     username    text unique,
     email    text unique,
     password text not null,
-    name     text,
     silver   number
 );
 

@@ -17,7 +17,6 @@ export class AuthRegister extends OpenAPIRoute {
         tags: ['Auth'],
         summary: 'Register user',
         requestBody: {
-            name: String,
             username: String,
             email: new Email(),
             silver: Number,
@@ -30,8 +29,7 @@ export class AuthRegister extends OpenAPIRoute {
                     success: Boolean,
                     result: {
                         user: {
-                            username: String,
-                            name: String
+                            username: String
                         }
                     }
                 },
@@ -55,7 +53,6 @@ export class AuthRegister extends OpenAPIRoute {
                     username: data.body.username,
                     email: data.body.email,
                     silver: data.body.silver,
-                    name: data.body.name,
                     password: await hashPassword(data.body.password, env.SALT_TOKEN),
                 },
                 returning: '*'
@@ -76,8 +73,7 @@ export class AuthRegister extends OpenAPIRoute {
             success: true,
             result: {
                 user: {
-                    username: user.results.username,
-                    name: user.results.name,
+                    username: user.results.username
                 }
             }
         }
@@ -91,9 +87,8 @@ export class AuthOrRegister extends OpenAPIRoute {
         tags: ['Auth'],
         summary: 'Register user',
         requestBody: {
-            name: String,
             username: String,
-            email: new Email(),
+            email: z.string().email().optional(), // Making the email field optional
             password: z.string().min(8).max(16),
         },
         responses: {
@@ -103,8 +98,7 @@ export class AuthOrRegister extends OpenAPIRoute {
                     success: Boolean,
                     result: {
                         user: {
-                            username: String,
-                            name: String
+                            username: String
                         }
                     }
                 },
@@ -136,27 +130,10 @@ export class AuthOrRegister extends OpenAPIRoute {
                     ]
                 },
             }).execute()
-    
-            //Registeer user if not exists
-            if (!user.results) {
-                // User is registered    
-                user = await context.qb.insert({
-                    tableName: 'users',
-                    data: {
-                        username: data.body.username,
-                        email: data.body.email,
-                        silver: 1000,
-                        name: data.body.name,
-                        password: await hashPassword(data.body.password, env.SALT_TOKEN),
-                    },
-                    returning: '*'
-                }).execute()
-            } 
-            //Auth User if exists
-            else {
+            try {
+                //check if user exists
                 let expiration = new Date();
                 expiration.setDate(expiration.getDate() + 7);
-        
                 const session = await context.qb.insert({
                     tableName: 'users_sessions',
                     data: {
@@ -170,33 +147,45 @@ export class AuthOrRegister extends OpenAPIRoute {
                 return {
                     success: true,
                     result: {
+                        new_user: false,
                         session: {
                             token: session.results.token,
                             expires_at: session.results.expires_at,
                         }
                     }
                 }
-            }         
+            } catch (e) {
+                // User is registered    
+                user = await context.qb.insert({
+                    tableName: 'users',
+                    data: {
+                        username: data.body.username,
+                        silver: 1000,
+                        password: await hashPassword(data.body.password, env.SALT_TOKEN),
+                    },
+                    returning: '*'
+                }).execute()
+                
+                return {
+                    success: true,
+                    result: {
+                        user: {
+                            new_user: true,
+                            username: user.results.username
+                        }
+                    }
+                }
+            }
         } catch (e) {
             return new Response(JSON.stringify({
                 success: false,
-                errors: "Incorrect Password"
+                errors: "Incorrect password"
             }), {
                 headers: {
                     'content-type': 'application/json;charset=UTF-8',
                 },
                 status: 400,
             })
-        }
-
-        return {
-            success: true,
-            result: {
-                user: {
-                    username: user.results.username,
-                    name: user.results.name,
-                }
-            }
         }
     }
 }
@@ -294,7 +283,31 @@ export function getBearer(request: Request): null | string {
     return authHeader.substring(6).trim()
 }
 
+export async function getAuthUser(request: Request, env: any, context: any) {
+    
+    let expiration = new Date();
+    expiration.setDate(expiration.getDate() + 7);
+    const session = await context.qb.insert({
+        tableName: 'users_sessions',
+        data: {
+            user_id: user.results.id,
+            token: await hashPassword((Math.random() + 1).toString(3), env.SALT_TOKEN),
+            expires_at: expiration.getTime()
+        },
+        returning: '*'
+    }).execute()
 
+    return {
+        success: true,
+        result: {
+            new_user: false,
+            session: {
+                token: session.results.token,
+                expires_at: session.results.expires_at,
+            }
+        }
+    }
+}
 export async function authenticateUser(request: Request, env: any, context: any) {
     const token = getBearer(request)
     let session

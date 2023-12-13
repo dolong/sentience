@@ -2,7 +2,7 @@ import { OpenAPIRouter } from "@cloudflare/itty-router-openapi";
 import { GetSearch } from "./search";
 import { ChooseLane } from "./ghostdice/chooseLane";
 import { RollDice } from "./ghostdice/diceRolling";
-import {authenticateUser, AuthLogin, AuthRegister} from "./auth";
+import {authenticateUser, AuthLogin, AuthRegister, AuthOrRegister} from "./auth";
 import {D1QB} from "workers-qb";
 
 export const router = OpenAPIRouter({
@@ -28,6 +28,7 @@ router.registry.registerComponent('securitySchemes', 'bearerAuth', {
 // 1. Endpoints that don't require Auth
 router.post('/api/auth/register', AuthRegister);
 router.post('/api/auth/login', AuthLogin);
+router.post('/api/auth/register-or-login', AuthOrRegister);
 
 router.post("/api/ghostdice/choose-lane", ChooseLane);
 router.post("/api/ghostdice/diceroll", RollDice);

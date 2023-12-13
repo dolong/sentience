@@ -148,6 +148,9 @@ export class AuthOrRegister extends OpenAPIRoute {
                     success: true,
                     result: {
                         new_user: false,
+                        user: {
+                            username: user.results.username
+                        },
                         session: {
                             token: session.results.token,
                             expires_at: session.results.expires_at,

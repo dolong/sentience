@@ -51,10 +51,36 @@ router.all("*", () => new Response("Not Found.", { status: 404 }));
 
 export default {
 	fetch: async (request, env, ctx) => {
-		// Inject query builder in every endpoint
-		const qb = new D1QB(env.DB)
-		// qb.setDebugger(true)
-
-		return router.handle(request, env, {...ctx, qb: qb})
+	  const qb = new D1QB(env.DB);
+  
+	  // Apply CORS middleware
+	  const corsHeaders = handleCORS(request);
+	  if (corsHeaders instanceof Response) {
+		return corsHeaders;
+	  }
+  
+	  const response = await router.handle(request, env, {...ctx, qb: qb});
+	  // Attach CORS headers to the response
+	  Object.entries(corsHeaders).forEach(([key, value]) => {
+		response.headers.set(key, value);
+	  });
+  
+	  return response;
 	},
-};
+  };
+  
+function handleCORS(request) {
+	// Set CORS headers
+	const headers = new Headers({
+	  'Access-Control-Allow-Origin': request.headers.get('Origin') || '*', // Or specify your domain
+	  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+	  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+	});
+  
+	// Handle preflight requests
+	if (request.method === 'OPTIONS') {
+	  return new Response(null, { headers, status: 204 });
+	}
+  
+	return headers;
+  }

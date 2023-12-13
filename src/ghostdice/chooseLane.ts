@@ -75,7 +75,7 @@ export class ChooseLane extends OpenAPIRoute {
                 const response = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST',
                     headers: {
-                      'Authorization': `Bearer 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`,
+                      'Authorization': `Bearer ${env.OPENAI_TOKEN}`,
                       'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({

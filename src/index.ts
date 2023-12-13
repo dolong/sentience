@@ -2,6 +2,7 @@ import { OpenAPIRouter } from "@cloudflare/itty-router-openapi";
 import { GetSearch } from "./search";
 import { ChooseLane } from "./ghostdice/chooseLane";
 import { RollDice } from "./ghostdice/diceRolling";
+import { getSilver, setSilver } from "./silver";
 import {authenticateUser, AuthLogin, AuthRegister, AuthOrRegister} from "./auth";
 import {D1QB} from "workers-qb";
 
@@ -29,6 +30,8 @@ router.registry.registerComponent('securitySchemes', 'bearerAuth', {
 router.post('/api/auth/register', AuthRegister);
 router.post('/api/auth/login', AuthLogin);
 router.post('/api/auth/register-or-login', AuthOrRegister);
+router.post('/api/get-silver', getSilver);
+router.post('/api/set-silver', setSilver);
 
 router.post("/api/ghostdice/choose-lane", ChooseLane);
 router.post("/api/ghostdice/diceroll", RollDice);

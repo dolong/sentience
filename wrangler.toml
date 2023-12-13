@@ -1,0 +1,13 @@
+name = "d1-auth-example"
+main = "src/index.ts"
+compatibility_date = "2023-05-18"
+
+
+[[d1_databases]]
+binding = "DB" # i.e. available in your Worker on env.DB
+database_name = "sentience-db"
+database_id = "aedf4b01-1c24-4921-b4d5-7a63d28790f9"
+
+
+[vars]
+SALT_TOKEN = "sadfasdghjyt45645t"

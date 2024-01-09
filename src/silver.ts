@@ -3,6 +3,7 @@ import {OpenAPIRoute} from '@cloudflare/itty-router-openapi';
 
 export class getSilver extends OpenAPIRoute {
     static schema = {
+        tags: ['Rewards'],
         summary: 'Get User Silver',
         requestBody: {
             username: String,
@@ -51,23 +52,39 @@ export class getSilver extends OpenAPIRoute {
             }), {
                 headers: {
                     'content-type': 'application/json;charset=UTF-8',
+                    'Access-Control-Allow-Origin': '*', // Allow all origins
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
                 },
                 status: 400,
             })
         }
-        return {
+
+        
+        const response = new Response(JSON.stringify({ 
             success: true,
             result: {
+                username: user.results.username,
                 user_silver: user.results.silver
-            }
-        }
+            }}), {
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*', // Allow all origins
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+              }
+          });
+
+          return response;
+          
     }
 }
 
 
 export class setSilver extends OpenAPIRoute {
     static schema = {
-        summary: 'Get User Silver',
+        tags: ['Rewards'],
+        summary: 'Set User Silver',
         requestBody: {
             username: String,
             silver: Number
@@ -115,7 +132,8 @@ export class setSilver extends OpenAPIRoute {
                 errors: "Unknown user"
             }), {
                 headers: {
-                    'content-type': 'application/json;charset=UTF-8',
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*', // Allow all origins
                 },
                 status: 400,
             })
@@ -140,13 +158,25 @@ export class setSilver extends OpenAPIRoute {
                     ]
                 },
             }).execute()
-            
-            return {
+
+
+
+            const response = new Response(JSON.stringify({ 
                 success: true,
-                result: {
+                result: {  
+                    username: data.body.username,
                     user_silver: newSilverTotal
-                }
-            }
+                }  }), {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*', // Allow all origins
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                  }
+              });
+
+              return response;
+
         }
     }
 }

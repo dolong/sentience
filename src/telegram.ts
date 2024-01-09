@@ -9,21 +9,17 @@ const cors = {
     }
   } 
 
-export class RollDice extends OpenAPIRoute {
+export class telegram_webhook extends OpenAPIRoute {
     static schema = {
-        tags: ['Game Utility'],
-        summary: 'Roll Dice',
-        requestBody: { dice: Number },
+        tags: ['telegram'],
+        summary: 'Webhook endpoint',
+        requestBody: { input: String },
         responses: {
             '200': {
                 description: "Successful response",
                 schema: {
                     success: Boolean,
                     result: {
-                        user: {
-                            email: String,
-                            name: String
-                        }
                     }
                 },
             },
@@ -39,15 +35,10 @@ export class RollDice extends OpenAPIRoute {
 
 
     async handle(request: Request, env: any, context: any, data: Record<string, any>) {
-        const diceRolls = [];
-        const diceNum = data.body.dice;
-        for (let i = 0; i < diceNum; i++) {
-            const roll = Math.floor(Math.random() * 6) + 1; // Random number between 1 and 6
-            diceRolls.push(roll);
-        }
+        const body = data.body;
     
         // Create a new response with CORS headers
-        const response = new Response(JSON.stringify({ rolls: diceRolls }), cors);
+        const response = new Response(JSON.stringify({ input: body }), cors);
     
         return response;
     }

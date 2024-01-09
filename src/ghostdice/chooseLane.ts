@@ -2,6 +2,7 @@ import { OpenAPIRoute } from "@cloudflare/itty-router-openapi";
 
 export class ChooseLane extends OpenAPIRoute {
     static schema = {
+        tags: ['ghostdice'],
         summary: 'Chat GPT Lane Choosing',
         requestBody: String,
         responses: {
@@ -30,10 +31,10 @@ export class ChooseLane extends OpenAPIRoute {
     async handle(request: Request, env: any, context: any, data: Record<string, any>) {
         let extracted
         try {
-            console.log("TADA BODY", data.body)
+            console.log("Body:", data.body)
             extracted = extractLastGameUpdateAndPlayer(data.body)
-            console.log("Player", extracted.player)
-            console.log("Status", extracted.lanes)
+            console.log("Player:", extracted.player)
+            console.log("Status:", extracted.lanes)
 
             const currentPlayer = extracted.player
             const currentMoves = data.body            
@@ -49,7 +50,7 @@ export class ChooseLane extends OpenAPIRoute {
                   const message = [{ role: 'system', content: prompt }]
           
                   //currentMoves = "[{ role: 'assistant', content: '[1,1]' }, { role: 'user', 'content': '[2,2]' }]"
-                    let history;
+                  let history;
           
                   if (currentMoves) {
                     // Parse the currentMoves string to an array of objects
@@ -68,9 +69,9 @@ export class ChooseLane extends OpenAPIRoute {
                     console.log('No history or insufficient history provided');
                   }
           
-                  console.log("history saved")
-                  console.log(message)
-                  console.log("Loading openai")
+                  // console.log("history saved")
+                  // console.log(message)
+                  // console.log("Loading openai")
 
                 const response = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST',
@@ -104,9 +105,21 @@ export class ChooseLane extends OpenAPIRoute {
           
                 // Assuming jsonResponse is already parsed as shown previously
                 if (result.lane_choice) {
-                    if (valid_choice(parseInt(currentPlayer), result.lane_choice, lanes))
-                    return { move: result.lane_choice };
-                    else
+                    if (valid_choice(parseInt(currentPlayer), result.lane_choice, lanes)) {
+                    
+
+                    const response = new Response(JSON.stringify({ move: result.lane_choice }), {
+                      headers: {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*', // Allow all origins
+                          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                        }
+                    });
+
+                    return response;
+
+                    } else
                     attempts++;
                 } else {
                     console.log('Invalid', jsonResponse.choices[0].message.content); // Directly using jsonResponse
@@ -123,21 +136,16 @@ export class ChooseLane extends OpenAPIRoute {
         } catch (e) {
             return new Response(JSON.stringify({
                 success: false,
-                errors: "User with that email already exists"
+                errors: e.message
             }), {
-                headers: {
-                    'content-type': 'application/json;charset=UTF-8',
+                headers: {                    
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*', // Allow all origins
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
                 },
                 status: 400,
             })
-        }
-
-        return {
-            success: true,
-            result: {
-                "horry": "it works",
-                "extract": extracted
-            }
         }
     }
 
@@ -145,6 +153,158 @@ export class ChooseLane extends OpenAPIRoute {
 
 }
 
+export class ChooseLaneChatGPT3_5 extends OpenAPIRoute {
+  static schema = {
+      tags: ['ghostdice'],
+      summary: 'Chat GPT Lane Choosing',
+      requestBody: String,
+      responses: {
+          '200': {
+              description: "Successful response",
+              schema: {
+                  success: Boolean,
+                  result: {
+                      user: {
+                          email: String,
+                          name: String
+                      }
+                  }
+              },
+          },
+          '400': {
+              description: "Error",
+              schema: {
+                  success: Boolean,
+                  error: String
+              },
+          },
+      },
+  };
+
+  async handle(request: Request, env: any, context: any, data: Record<string, any>) {
+      let extracted
+      try {
+          console.log("Body:", data.body)
+          extracted = extractLastGameUpdateAndPlayer(data.body)
+          console.log("Player:", extracted.player)
+          console.log("Status:", extracted.lanes)
+
+          const currentPlayer = extracted.player
+          const currentMoves = data.body            
+          const fixedJsonString = extracted.lanes.replace(/'/g, '"');
+          const lanes = JSON.parse(fixedJsonString);
+
+          
+          let attempts = 0;
+
+          while (attempts < 1) {
+              try {
+                // Call OpenAI API
+                const message = [{ role: 'system', content: prompt }]
+        
+                //currentMoves = "[{ role: 'assistant', content: '[1,1]' }, { role: 'user', 'content': '[2,2]' }]"
+                let history;
+        
+                if (currentMoves) {
+                  // Parse the currentMoves string to an array of objects
+                  try {
+                    history = JSON.parse(currentMoves);
+                  } catch (e) {
+                    console.error("Error parsing currentMoves:", e);
+                    // Handle error, maybe set a flag or return from the function
+                  }
+        
+                  // Push each element of the parsed history to the message array
+                  history.forEach(move => {
+                    message.push(move);
+                  });
+                } else if (!currentMoves || currentMoves.length < 3) {
+                  console.log('No history or insufficient history provided');
+                }
+        
+                // console.log("history saved")
+                // console.log(message)
+                // console.log("Loading openai")
+
+              const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${env.OPENAI_TOKEN}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    model: 'gpt-3.5-turbo-1106',
+                    response_format: { "type": "json_object" },
+                    messages: message,
+                    temperature: 0.3,
+                  })
+                });
+                
+                // Define a type for the OpenAI response structure
+              interface OpenAIResponse {
+                  choices: Array<{
+                  message: {
+                      content: string;
+                  };
+                  }>;
+              }
+              
+                const jsonResponse = await response.json() as OpenAIResponse;
+                const result = JSON.parse(jsonResponse.choices[0].message.content.trim());
+                console.log(jsonResponse.choices[0].message);
+                console.log(result);
+
+                
+        
+              // Assuming jsonResponse is already parsed as shown previously
+              if (result.lane_choice) {
+                  if (valid_choice(parseInt(currentPlayer), result.lane_choice, lanes)) {
+                  
+
+                  const response = new Response(JSON.stringify({ move: result.lane_choice }), {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*', // Allow all origins
+                        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                      }
+                  });
+
+                  return response;
+
+                  } else
+                  attempts++;
+              } else {
+                  console.log('Invalid', jsonResponse.choices[0].message.content); // Directly using jsonResponse
+                  attempts++;
+              }
+              } catch (error) {        
+                console.log('Invalid')
+                //attempts++;
+                 throw new Error('Could not generate valid output', error);
+              }
+            }
+            throw new Error('Could not generate valid output after 3 attempts');
+
+      } catch (e) {
+          return new Response(JSON.stringify({
+              success: false,
+              errors: e.message
+          }), {
+              headers: {                    
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*', // Allow all origins
+                  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+              },
+              status: 400,
+          })
+      }
+  }
+
+
+
+}
 const prompt = `Ghost Dice
 Objective: The goal is to score the highest by strategically placing dice in lanes and forcing the opponent to discard dice.
 Setup:
@@ -205,16 +365,6 @@ You are an AI opponent that is connected to an API that only responds with lane 
 
 The user will input what the system has logged so far. 
 `
-
-async function hashPassword(password: string, salt: string): Promise<string> {
-    const utf8 = new TextEncoder().encode(`${salt}:${password}`);
-
-    const hashBuffer = await crypto.subtle.digest({name: 'SHA-256'}, utf8);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray
-        .map((bytes) => bytes.toString(16).padStart(2, '0'))
-        .join('');
-}
 
 // Define the functions
 function extractLastGameUpdate(lastGame: string): string | null {

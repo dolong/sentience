@@ -1,6 +1,17 @@
 import {Email, OpenAPIRoute} from '@cloudflare/itty-router-openapi';
 import {z} from 'zod'
+import Web3 from 'web3';
 
+const web3 = new Web3();
+
+const cors = {
+    headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*', // Allow all origins
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    }
+  } 
 
 async function hashPassword(password: string, salt: string): Promise<string> {
     const utf8 = new TextEncoder().encode(`${salt}:${password}`);
@@ -10,6 +21,155 @@ async function hashPassword(password: string, salt: string): Promise<string> {
     return hashArray
         .map((bytes) => bytes.toString(16).padStart(2, '0'))
         .join('');
+}
+
+export class CreateWallet extends OpenAPIRoute {
+    static schema = {
+        tags: ['Wallet'],
+        summary: 'Create a wallet for a user',
+        requestBody: {
+            username: String,
+        },
+        responses: {
+            '200': {
+                description: "Wallet created successfully",
+                schema: {
+                    success: Boolean,
+                    wallet: {
+                        address: String,
+                        privateKey: String
+                    }
+                },
+            },
+            '400': {
+                description: "Error",
+                schema: {
+                    success: Boolean,
+                    error: String
+                },
+            },
+        },
+    };
+
+    async handle(request: Request, env: any, context: any, data: Record<string, any>) {
+        const username = data.body.username;
+        const wallet = web3.eth.accounts.create();
+
+
+        try {
+            await context.qb.update({
+                tableName: 'users',
+                data: {
+                    sentience_wallet: wallet.address,
+                    sentience_passkey: wallet.privateKey,
+                },
+                where: {
+                    conditions: ['username = ?1'],
+                    params: [username],
+                },
+            }).execute();
+
+            return new Response(JSON.stringify({
+                success: true,
+                wallet: {
+                    address: wallet.address,
+                    privateKey: wallet.privateKey
+                }
+            }), cors);
+        } catch (e) {
+            return new Response(JSON.stringify({
+                success: false,
+                error: "Failed to create wallet"
+            }), cors);
+        }
+    }
+}
+export class CreateOrGetWallet extends OpenAPIRoute {
+    static schema = {
+        tags: ['Wallet'],
+        summary: 'Create or get a wallet for a user',
+        requestBody: {
+            username: String,
+        },
+        responses: {
+            '200': {
+                description: "Wallet processed successfully",
+                schema: {
+                    success: Boolean,
+                    wallet: {
+                        address: String,
+                        // Do not return privateKey here for security reasons
+                    },
+                    isNew: Boolean // Indicates if the wallet was created or existing
+                },
+            },
+            '400': {
+                description: "Error",
+                schema: {
+                    success: Boolean,
+                    error: String
+                },
+            },
+        },
+    };
+
+    async handle(request: Request, env: any, context: any, data: Record<string, any>) {
+        const username = data.body.username;
+        
+        try {
+            // Check if user already has a wallet
+            let user = await context.qb.fetchOne({
+                tableName: 'users',
+                fields: ['sentience_wallet', 'sentience_passkey'],
+                where: {
+                    conditions: ['username = ?1'],
+                    params: [username],
+                },
+            }).execute();
+
+            // If user already has a wallet, return it
+            if (user.results && user.results.sentience_wallet) {
+                return new Response(JSON.stringify({
+                    success: true,
+                    wallet: {
+                        address: user.results.sentience_wallet,
+                        passkey: user.results.sentience_passkey
+                    },
+                    isNew: false
+                }), cors);
+            } else {
+                // If user doesn't have a wallet, create one
+                const wallet = web3.eth.accounts.create();
+
+                // Update user record with new wallet details
+                await context.qb.update({
+                    tableName: 'users',
+                    data: {
+                        sentience_wallet: wallet.address,
+                        sentience_passkey: wallet.privateKey,
+                    },
+                    where: {
+                        conditions: ['username = ?1'],
+                        params: [username],
+                    },
+                }).execute();
+
+                return new Response(JSON.stringify({
+                    success: true,
+                    wallet: {
+                        address: wallet.address,
+                        passkey: wallet.privateKey
+                    },
+                    isNew: true
+                }), cors);
+            }
+        } catch (e) {
+            return new Response(JSON.stringify({
+                success: false,
+                error: "Failed to process wallet"
+            }), cors);
+        }
+    }
 }
 
 export class AuthRegister extends OpenAPIRoute {
@@ -63,20 +223,33 @@ export class AuthRegister extends OpenAPIRoute {
                 errors: "User with that username already exists"
             }), {
                 headers: {
-                    'content-type': 'application/json;charset=UTF-8',
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*', // Allow all origins
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
                 },
                 status: 400,
             })
         }
 
-        return {
+
+        return new Response(JSON.stringify({
             success: true,
             result: {
                 user: {
                     username: user.results.username
                 }
             }
-        }
+        }), {
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*', // Allow all origins
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+            },
+            status: 200,
+        })
+
     }
 }
 
@@ -144,7 +317,7 @@ export class AuthOrRegister extends OpenAPIRoute {
                     returning: '*'
                 }).execute()
         
-                return {
+                return new Response(JSON.stringify({
                     success: true,
                     result: {
                         new_user: false,
@@ -156,7 +329,16 @@ export class AuthOrRegister extends OpenAPIRoute {
                             expires_at: session.results.expires_at,
                         }
                     }
-                }
+                }), {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*', // Allow all origins
+                        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                    },
+                    status: 200,
+                })
+
             } catch (e) {
                 // User is registered    
                 user = await context.qb.insert({
@@ -167,9 +349,9 @@ export class AuthOrRegister extends OpenAPIRoute {
                         password: await hashPassword(data.body.password, env.SALT_TOKEN),
                     },
                     returning: '*'
-                }).execute()
-                
-                return {
+                }).execute()                                
+
+                return new Response(JSON.stringify({
                     success: true,
                     result: {
                         user: {
@@ -177,7 +359,15 @@ export class AuthOrRegister extends OpenAPIRoute {
                             username: user.results.username
                         }
                     }
-                }
+                }), {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*', // Allow all origins
+                        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                    },
+                    status: 200,
+                })
             }
         } catch (e) {
             return new Response(JSON.stringify({
@@ -185,7 +375,10 @@ export class AuthOrRegister extends OpenAPIRoute {
                 errors: "Incorrect password"
             }), {
                 headers: {
-                    'content-type': 'application/json;charset=UTF-8',
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*', // Allow all origins
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
                 },
                 status: 400,
             })
@@ -246,7 +439,10 @@ export class AuthLogin extends OpenAPIRoute {
                 errors: "Unknown user"
             }), {
                 headers: {
-                    'content-type': 'application/json;charset=UTF-8',
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*', // Allow all origins
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
                 },
                 status: 400,
             })
@@ -264,8 +460,8 @@ export class AuthLogin extends OpenAPIRoute {
             },
             returning: '*'
         }).execute()
-
-        return {
+        
+        return new Response(JSON.stringify({
             success: true,
             result: {
                 session: {
@@ -273,7 +469,16 @@ export class AuthLogin extends OpenAPIRoute {
                     expires_at: session.results.expires_at,
                 }
             }
-        }
+        }), {
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*', // Allow all origins
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+            },
+            status: 400,
+        })
+
     }
 }
 

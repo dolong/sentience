@@ -1,7 +1,7 @@
 name = "sentience-workflow"
 main = "src/index.ts"
 compatibility_date = "2023-05-18"
-
+node_compat = true
 
 [[d1_databases]]
 binding = "DB" # i.e. available in your Worker on env.DB
